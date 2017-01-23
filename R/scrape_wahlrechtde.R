@@ -35,7 +35,8 @@ germanpolls <- function() {
       "politbarometer",
       "gms",
       "dimap",
-      "insa")
+      "insa",
+      "ipsos")
   parteien <-
     c("cdu/csu",
       "spd",
