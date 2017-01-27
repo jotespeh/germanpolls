@@ -1,10 +1,13 @@
+
+
+scrape_laender <- function(laender = all, list = FALSE) {
+
 library(lubridate)
 library(rvest)
 library(stringr)
 library(tidyverse)
 
 #TODO: string->numeric for parties, fix datum for Berlin >2013, filter sonstiges
-
 
 # Scrape Laender polls page, select second table, which contains poll data then
 # coerce into dataframe
@@ -19,8 +22,15 @@ lwa %<>%
   mutate(
     header   = ifelse(grepl("(Bundestagswahl)", CDU), TRUE, FALSE),
     institut = gsub( "\\(.*$", "",  x = `Institut(Datum)`),
+    # Somewhat ugly fix for Berlin polling
+    # TODO : Datum für Berlin
     datum    = dmy(gsub( ".*\\((.*)\\).*", "\\1", x = `Institut(Datum)`)),
-    befragte = as.numeric(gsub( "[.]", "", str_sub(BefragteZeitraum, 1, 5))),
+    befragte = as.numeric(ifelse(
+                            str_sub(BefragteZeitraum,1,1) <= 2,
+                            gsub( "[.]", "", str_sub(BefragteZeitraum, 1, 5)),
+                            str_sub(BefragteZeitraum, 1, 3)
+                            )
+                          ),
     afd      = ifelse(grepl("AfD", Sonstige),
                         gsub("^[^AfD]*AfD([^%]+).*", "\\1", Sonstige)
                         , NA)
@@ -40,7 +50,7 @@ lwa %<>%
   )
 
 
-lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "afd"), pct2num)
+# lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "afd"), pct2num)
 
 
 # Get list of rownumbers for splitting
@@ -53,7 +63,13 @@ tab_bw <- split(lwa, cumsum(1:nrow(lwa) %in% lae_rn))
 tab_bw[1] <- NULL
 names(tab_bw) <- c("BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV", "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH")
 
-# Bind into one dataframe, add identifier and filter garbage
-tab_bw %<>% bind_rows(.id = "land")
-tab_bw %<>% filter(befragte < 2001 & !grepl("Bundestagswahl", institut))
+if (list == FALSE) {
+  # Bind into one dataframe, add identifier and filter garbage
+  tab_bw %<>% bind_rows(.id = "land")
+  tab_bw %<>% filter(befragte < 2001 & !grepl("Bundestagswahl", institut))
+  return(tab_bw)
+}
+else
+  return(tab_bw)
 
+}
