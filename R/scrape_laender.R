@@ -5,7 +5,7 @@ scrape_laender <- function(list = FALSE) {
   library(stringr)
   library(tidyverse)
 
-  #TODO:filter sonstiges, make AfD regex work if AfD ist not at beginning of string
+  #TODO: make AfD regex work if AfD ist not at beginning of string, fix befragte for inconsistent entries (s. HH newest, T • , O •), write some documentation
 
   # Scrape Laender polls page, select second table, which contains poll data then coerce into dataframe
   lwa <- "http://www.wahlrecht.de/umfragen/laender.htm" %>%
@@ -25,7 +25,6 @@ scrape_laender <- function(list = FALSE) {
         gsub(".*\\((.*)\\).*", "\\1", x = `Institut(Datum)`),
         str_sub(`Institut(Datum)`, -10, -1)
       )),
-
       befragte = as.numeric(ifelse(
         str_sub(BefragteZeitraum, 1, 1) <= 2,
         gsub("[.]", "", str_sub(BefragteZeitraum, 1, 5)),
@@ -35,7 +34,12 @@ scrape_laender <- function(list = FALSE) {
         grepl("AfD", Sonstige) | grepl("\\%AfD", Sonstige),
         gsub("^[^AfD]*AfD(*[^%]+).*", "\\1", Sonstige),
         NA
-      ))
+      )),
+      sonstige = ifelse(
+        grepl("Sonst", Sonstige),
+        str_extract(Sonstige, "\\. (\\d{1})"),
+        Sonstige
+      )
     ) %>%
     select(
       header,
@@ -48,21 +52,20 @@ scrape_laender <- function(list = FALSE) {
       lin = LINKE,
       fdp = FDP,
       afd,
-      sonstige = Sonstige
+      sonstige
     ) %>%
     filter(!grepl("Bundestagswahl", .$institut), !grepl("Institut", .$institut))
 
  # Percentage-string to numeric, loses precision, but no poll > 2013 has decimal
- lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp"),
+ lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
                 str_extract, pattern = "\\d{1,2}") %>%
-          map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp"), as.numeric) %>%
-          as_tibble()
-
+          map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
+                 as.numeric) %>%
+          as.data.frame()
 
   # Get vector of rownumbers for splitting 
   # Splitting is necessary, as all laender are in one table
   lae_rn <- rownames(lwa[lwa$header == TRUE,])
-
   # Split dataframe into list, using rownumbers 
   tab_bw <- split(lwa, cumsum(1:nrow(lwa) %in% lae_rn))
 
@@ -90,14 +93,14 @@ scrape_laender <- function(list = FALSE) {
 
   tab_bw %<>%
     map(~filter(., .$header == FALSE)) %>%
-    map(~select(., -header))
+    map(~select(., -header)) %>%
+    map(~filter(., !is.na(.$cdu)))
     
   if (list == FALSE) {
-    # Bind into one dataframe (or rather tibble)
+    # Bind into one dataframe
     tab_bw %<>% bind_rows(.id = "land")
     return(tab_bw)
   }
   else
     return(tab_bw)
-
 }
