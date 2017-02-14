@@ -1,7 +1,9 @@
-#' A function to scrape Wahlrecht.de
+#' A function to scrape Wahlrecht.de poll colletion at the federal level.
 #'
-#' germanpolls() is a function that gets polling data from [Wahlrecht.de](http://www.wahlrecht.de) for seven polling organisations and ten parties.
+#' germanpolls() is a function that gets polling data from [Wahlrecht.de](http://www.wahlrecht.de) for eight polling organisations and ten parties. The function returns a data.frame in wide format, unless you tell it not to.
+#' 
 #' @importFrom magrittr %>%
+#' @importFrom magrittr %<>%
 #' @importFrom rvest html_table
 #' @importFrom xml2 read_html
 #' @importFrom dplyr filter
@@ -13,11 +15,11 @@
 #'
 #' @examples
 #' polling_data <- germanpolls()
-#'
+#' polling_data <- germanpolls(long = TRUE)
 #' @export
 #'
 
-germanpolls <- function() {
+germanpolls <- function(long = FALSE) {
   library("purrr")
   library("rvest")
   library("XML")
@@ -81,7 +83,7 @@ germanpolls <- function() {
       for (head_el in seq_along(header)) {
         vec <- vector()
         hindex <- match(header[head_el], table_head)
-        # fuck up, extra loop because table of politbarometer is strange structured (td-element instead of th-element)
+        # fuck up, extra loop because table of politbarometer is  structured strangely (td-element instead of th-element)
         if (i == "politbarometer" &&
             (header[head_el] == "Befragte" || header[head_el] == "Zeitraum")) {
           hindex = hindex + 1
@@ -126,26 +128,30 @@ germanpolls <- function() {
     ))
 
   # gsub
-  df %<>% map(gsub, pattern = " %|≈|O • |T • |[?]", replacement = "")
-  df %<>% map(gsub, pattern = ",", replacement = ".")
-  df %<>% map_at("befragte",
-                 gsub,
-                 pattern = "[.]",
-                 replacement = "")
+  df %<>%
+    map(gsub, pattern = " %|≈|O • |T • |[?]", replacement = "") %>%
+    map(gsub, pattern = ",", replacement = ".") %>%
+    map_at("befragte",
+           gsub,
+           pattern = "[.]",
+           replacement = "")
 
   # classes
-  df %<>% map_at(parteien, as.numeric)
-  df %<>% map_at("befragte", as.numeric)
+  df %<>%
+    map_at(parteien, as.numeric) %>%
+    map_at("befragte", as.numeric)
   df$datum <- as.Date(df$datum, "%d.%m.%Y")
 
   df %<>% as.data.frame()
   df <- filter(df, !is.na(df$befragte))
 
+  if (long = TRUE) {
   # transform data set to longform
   df_l <-
     df %>% gather(partei, anteil, -institut, -datum, -befragte, -zeitraum, -typ)
   df_l$anteil <- df_l$anteil / 100
-
-  df
-
+  return(df_l)
+} else {
+  return(df)
+}
 }
