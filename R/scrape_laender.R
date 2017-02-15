@@ -4,16 +4,16 @@ scrape_laender <- function(list = FALSE) {
   library(rvest)
   library(stringr)
   library(tidyverse)
-
+  
   #TODO: make AfD regex work if AfD ist not at beginning of string, fix befragte for inconsistent entries (s. HH newest, T • , O •), write some documentation
-
+  
   # Scrape Laender polls page, select second table, which contains poll data then coerce into dataframe
   lwa <- "http://www.wahlrecht.de/umfragen/laender.htm" %>%
     read_html() %>%
     html_nodes("table") %>%
     .[[2]] %>%
     html_table(fill = TRUE)
-
+  
   # Find header rows for the 16 Laender using regex, clean up columns
   lwa %<>%
     mutate(
@@ -42,6 +42,7 @@ scrape_laender <- function(list = FALSE) {
       )
     ) %>%
     select(
+      auftraggeber = `Auftrag-geber`,
       header,
       datum,
       institut,
@@ -55,20 +56,26 @@ scrape_laender <- function(list = FALSE) {
       sonstige
     ) %>%
     filter(!grepl("Bundestagswahl", .$institut), !grepl("Institut", .$institut))
-
- # Percentage-string to numeric, loses precision, but no poll > 2013 has decimal
- lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
-                str_extract, pattern = "\\d{1,2}") %>%
-          map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
-                 as.numeric) %>%
-          as.data.frame()
-
+  # Another Berlin Fix
+  lwa %<>% mutate(institut = ifelse(
+    auftraggeber == "BerlinerZeitung" & datum > "01-01-2014",
+    "Forsa",
+    institut
+  ))
+  
+  # Percentage-string to numeric, loses precision, but no poll > 2013 has decimal
+  lwa %<>% map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
+                  str_extract, pattern = "\\d{1,2}") %>%
+    map_at(c("cdu", "spd", "gru", "lin", "fdp", "fdp", "sonstige"),
+           as.numeric) %>%
+    as.data.frame()
+  
   # Get vector of rownumbers for splitting 
   # Splitting is necessary, as all laender are in one table
   lae_rn <- rownames(lwa[lwa$header == TRUE,])
   # Split dataframe into list, using rownumbers 
   tab_bw <- split(lwa, cumsum(1:nrow(lwa) %in% lae_rn))
-
+  
   # Delete first df which only contains info that we don't need, then assign names
   tab_bw[1] <- NULL
   names(tab_bw) <-
@@ -90,12 +97,12 @@ scrape_laender <- function(list = FALSE) {
       "SH",
       "TH"
     )
-
+  
   tab_bw %<>%
     map(~filter(., .$header == FALSE)) %>%
     map(~select(., -header)) %>%
     map(~filter(., !is.na(.$cdu)))
-    
+  
   if (list == FALSE) {
     # Bind into one dataframe
     tab_bw %<>% bind_rows(.id = "land")
