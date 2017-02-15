@@ -145,7 +145,7 @@ germanpolls <- function(long = FALSE) {
   df %<>% as.data.frame()
   df <- filter(df, !is.na(df$befragte))
 
-  if (long = TRUE) {
+  if (long == TRUE) {
   # transform data set to longform
   df_l <-
     df %>% gather(partei, anteil, -institut, -datum, -befragte, -zeitraum, -typ)
